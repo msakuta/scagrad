@@ -37,6 +37,9 @@ object Hello extends App {
     val sigma = tape.value("sigma", 1)
     val in = -(x * x / (sigma * sigma))
     val exp = in("exp", scala.math.exp, scala.math.exp, { (in, out, der) => derive_exp(tape, in, out, der) })
+    val file = FileWriter("graph.dot")
+    tape.dot(file)
+    file.close
     println("xval, y, dy/dx, dy/dx (backprop), dy/dsigma (backprop)")
     for i <- -50 until 50
     do
@@ -61,13 +64,15 @@ object Hello extends App {
       case Some(x) => x
       case None => return
     }
+    // Output graph before the second order differentiation because it will produce too many nodes
+    // to be useful as a visualization.
+    val file = FileWriter("graph.dot")
+    tape.dot(file)
+    file.close
     val exp3 = exp2.gen_graph(x) match {
       case Some(x) => x
       case None => return
     }
-    val file = FileWriter("graph.dot")
-    tape.dot(file)
-    file.close
     println("xval, y, dy/dx, dy/dx (backprop), dy/dsigma (backprop)")
     for i <- -50 until 50
     do

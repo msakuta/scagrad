@@ -22,6 +22,10 @@ So let's give a try and implement autograd.
 
 ![Higher order autograd plot](images/scagrad-higher.png)
 
+* Graph visualization with graphviz
+
+![Graphviz](images/graphviz.png)
+
 
 ## How to build and run
 
