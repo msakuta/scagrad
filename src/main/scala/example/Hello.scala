@@ -1,6 +1,7 @@
 package example
 
 import scala.math.pow
+import java.io._
 
 object Hello extends App {
   def demo = {
@@ -18,8 +19,8 @@ object Hello extends App {
     val tape = new Tape
     val x = tape.value("x", 0)
     val x2 = x * x
-    def derive_sin(in: Int, out: Int, der: Int): Option[Int] = Some(tape.add_unary(in, scala.math.sin, scala.math.cos, derive_sin))
-    val sin_x2 = x2(scala.math.sin, scala.math.cos, derive_sin)
+    def derive_sin(in: Int, out: Int, der: Int): Option[Int] = Some(tape.add_unary(in, "sin", scala.math.sin, scala.math.cos, derive_sin))
+    val sin_x2 = x2("sin", scala.math.sin, scala.math.cos, derive_sin)
     for i <- -50 until 50
     do
       val xval = i / 10.0
@@ -35,7 +36,7 @@ object Hello extends App {
     val x = tape.value("x", 0)
     val sigma = tape.value("sigma", 1)
     val in = -(x * x / (sigma * sigma))
-    val exp = in(scala.math.exp, scala.math.exp, { (in, out, der) => derive_exp(tape, in, out, der) })
+    val exp = in("exp", scala.math.exp, scala.math.exp, { (in, out, der) => derive_exp(tape, in, out, der) })
     println("xval, y, dy/dx, dy/dx (backprop), dy/dsigma (backprop)")
     for i <- -50 until 50
     do
@@ -55,7 +56,7 @@ object Hello extends App {
     val x = tape.value("x", 0)
     val sigma = tape.value("sigma", 1)
     val in = -(x * x / (sigma * sigma))
-    val exp = in(scala.math.exp, scala.math.exp, { (in, out, der) => derive_exp(tape, in, out, der) })
+    val exp = in("exp", scala.math.exp, scala.math.exp, { (in, out, der) => derive_exp(tape, in, out, der) })
     val exp2 = exp.gen_graph(x) match {
       case Some(x) => x
       case None => return
@@ -64,6 +65,9 @@ object Hello extends App {
       case Some(x) => x
       case None => return
     }
+    val file = FileWriter("graph.dot")
+    tape.dot(file)
+    file.close
     println("xval, y, dy/dx, dy/dx (backprop), dy/dsigma (backprop)")
     for i <- -50 until 50
     do
@@ -77,15 +81,15 @@ object Hello extends App {
       println(s"[$xval, ${exp.eval()}, ${exp.derive(x)}, ${exp2.eval()}, ${exp3.eval()}],")
   }
 
-  demo_sin
+  demo_higher_order
 }
 
 class Tape {
-  var terms: Array[TapeNode] = Array(TapeNode(Value("0", 0)), TapeNode(Value("1", 1)))
+  var terms: Array[TapeNode] = Array(TapeNode("0", Value(0)), TapeNode("1", Value(1)))
 
-  def value(id: String, v: Double) = {
+  def value(name: String, v: Double) = {
     val idx = terms.length
-    terms = terms :+ TapeNode(Value(id, v))
+    terms = terms :+ TapeNode(name, Value(v))
     TapeTerm(idx, this)
   }
 
@@ -95,7 +99,7 @@ class Tape {
       case None => {}
     }
     val data = terms(term).term match {
-      case Value(_, v) => v
+      case Value(v) => v
       case Add(lhs, rhs) => eval_int(lhs) + eval_int(rhs)
       case Sub(lhs, rhs) => eval_int(lhs) - eval_int(rhs)
       case Mul(lhs, rhs) => eval_int(lhs) * eval_int(rhs)
@@ -108,7 +112,7 @@ class Tape {
   }
 
   def derive_int(term: Int, wrt: Int): Double = terms(term).term match {
-    case Value(_, _) => if (wrt == term) 1 else 0
+    case Value(_) => if (wrt == term) 1 else 0
     case Add(lhs, rhs) => derive_int(lhs, wrt) + derive_int(rhs, wrt)
     case Sub(lhs, rhs) => derive_int(lhs, wrt) - derive_int(rhs, wrt)
     case Mul(lhs, rhs) => derive_int(lhs, wrt) * eval_int(rhs) + eval_int(lhs) * derive_int(rhs, wrt)
@@ -127,7 +131,7 @@ class Tape {
     for i <- term to 0 by -1 do
       val node = terms(i)
       node.term match {
-        case Value(_, _) => {}
+        case Value(_) => {}
         case Add(lhs, rhs) => node.grad.map { grad =>
           terms(lhs).set_grad(grad)
           terms(rhs).set_grad(grad)
@@ -157,7 +161,7 @@ class Tape {
 
   def gen_graph(idx: Int, wrt: Int): Option[Int] = {
     val ret = terms(idx).term match {
-      case Value(_, _) => if (idx == wrt) { Some(1) } else { None }
+      case Value(_) => if (idx == wrt) { Some(1) } else { None }
       case Add(lhs, rhs) => {
         (gen_graph(lhs, wrt), gen_graph(rhs, wrt)) match {
           case (Some(lhs), None) => Some(lhs)
@@ -212,42 +216,60 @@ class Tape {
 
   def add_add(lhs: Int, rhs: Int) = {
     val id = terms.length
-    terms = terms :+ TapeNode(Add(lhs, rhs))
+    terms = terms :+ TapeNode(s"(${terms(lhs).name} + ${terms(rhs).name})", Add(lhs, rhs))
     id
   }
 
   def add_sub(lhs: Int, rhs: Int) = {
     val id = terms.length
-    terms = terms :+ TapeNode(Sub(lhs, rhs))
+    terms = terms :+ TapeNode(s"(${terms(lhs).name} - ${terms(rhs).name})", Sub(lhs, rhs))
     id
   }
 
   def add_mul(lhs: Int, rhs: Int) = {
     val id = terms.length
-    terms = terms :+ TapeNode(Mul(lhs, rhs))
+    terms = terms :+ TapeNode(s"(${terms(lhs).name} * ${terms(rhs).name})", Mul(lhs, rhs))
     id
   }
 
   def add_div(lhs: Int, rhs: Int) = {
     val id = terms.length
-    terms = terms :+ TapeNode(Div(lhs, rhs))
+    terms = terms :+ TapeNode(s"(${terms(lhs).name} / ${terms(rhs).name})", Div(lhs, rhs))
     id
   }
 
   def add_neg(term: Int) = {
     val id = terms.length
-    terms = terms:+ TapeNode(Neg(term))
+    terms = terms:+ TapeNode(s"-${terms(term).name}", Neg(term))
     id
   }
 
-  def add_unary(term: Int, f: (Double) => Double, g: (Double) => Double, gg: (Int, Int, Int) => Option[Int]) = {
+  def add_unary(term: Int, name: String, f: (Double) => Double, g: (Double) => Double, gg: (Int, Int, Int) => Option[Int]) = {
     val id = terms.length
-    terms = terms :+ TapeNode(UnaryFn(term, f, g, gg))
+    terms = terms :+ TapeNode(s"$name(${terms(term).name})", UnaryFn(term, f, g, gg))
     id
   }
 
   def clear_data() = for node <- terms do node.data = None
   def clear_grad() = for node <- terms do node.grad = None
+  def dot(writer: FileWriter) = {
+      writer.write("digraph D {\n")
+      for ( (node, i) <- terms.zipWithIndex ) {
+          writer.write(s"a$i [label=\"${node.name}\", shape=rect];\n")
+      }
+      for ( (node, i) <- terms.zipWithIndex ) {
+        node.term match {
+          case Value(_) => {}
+          case Add(lhs, rhs) => writer.write(s"a$lhs -> a$i;\na$rhs -> a$i;\n")
+          case Sub(lhs, rhs) => writer.write(s"a$lhs -> a$i;\na$rhs -> a$i;\n")
+          case Mul(lhs, rhs) => writer.write(s"a$lhs -> a$i;\na$rhs -> a$i;\n")
+          case Div(lhs, rhs) => writer.write(s"a$lhs -> a$i;\na$rhs -> a$i;\n")
+          case Neg(term) => writer.write(s"a$term -> a$i;\n")
+          case UnaryFn(term, _, _, _) => writer.write(s"a$term -> a$i;\n")
+        }
+      }
+      writer.write("}\n")
+  }
 }
 
 case class TapeTerm(idx: Int, tape: Tape) {
@@ -266,12 +288,12 @@ case class TapeTerm(idx: Int, tape: Tape) {
   def /(other: TapeTerm) = TapeTerm(tape.add_div(idx, other.idx), tape)
   def unary_- = TapeTerm(tape.add_neg(idx), tape)
 
-  def apply(f: (Double) => Double, g: (Double) => Double, gg: (Int, Int, Int) => Option[Int]) = {
-    TapeTerm(tape.add_unary(idx, f, g, gg), tape)
+  def apply(name: String, f: (Double) => Double, g: (Double) => Double, gg: (Int, Int, Int) => Option[Int]) = {
+    TapeTerm(tape.add_unary(idx, name, f, g, gg), tape)
   }
 }
 
-class TapeNode(value: Term) {
+class TapeNode(val name: String, value: Term) {
   var data: Option[Double] = None
   var grad: Option[Double] = None
   def set(v: Double) = {
@@ -291,7 +313,7 @@ class TapeNode(value: Term) {
 sealed trait Term {
   def set(v: Double): Unit = throw Exception()
 }
-case class Value(id: String, var a: Double) extends Term {
+case class Value(var a: Double) extends Term {
   override def set(v: Double) = this.a = v
 }
 case class Add(lhs: Int, rhs: Int) extends Term
