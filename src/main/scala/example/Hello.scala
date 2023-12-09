@@ -9,12 +9,12 @@ object Hello extends App {
   val c = tape.value("c", 42)
   val ab = a + b
   val abc = ab * c
-  println(abc.eval)
+  println(abc.eval())
   println(abc.derive(a))
 
   val x = tape.value("x", 0)
   val sin_x = x.apply(scala.math.sin, scala.math.cos)
-  println(sin_x.eval)
+  println(sin_x.eval())
   println(sin_x.derive(x))
 }
 
