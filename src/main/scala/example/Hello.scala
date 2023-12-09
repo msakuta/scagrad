@@ -3,19 +3,26 @@ package example
 import scala.math.pow
 
 object Hello extends App {
-  val tape = new Tape
-  val a = tape.value("a", 123)
-  val b = tape.value("b", 123)
-  val c = tape.value("c", 42)
-  val ab = a + b
-  val abc = ab * c
-  println(abc.eval())
-  println(abc.derive(a))
+  def demo = {
+    val tape = new Tape
+    val a = tape.value("a", 123)
+    val b = tape.value("b", 123)
+    val c = tape.value("c", 42)
+    val ab = a + b
+    val abc = ab * c
+    println(abc.eval())
+    println(abc.derive(a))
+  }
 
+  val tape = new Tape
   val x = tape.value("x", 0)
-  val sin_x = x.apply(scala.math.sin, scala.math.cos)
-  println(sin_x.eval())
-  println(sin_x.derive(x))
+  val x2 = x * x
+  val sin_x2 = x2(scala.math.sin, scala.math.cos)
+  for i <- -50 until 50
+  do
+    val xval = i / 10.0
+    x.set(xval)
+    println(s"[$i, ${sin_x2.eval()}, ${sin_x2.derive(x)}],")
 }
 
 class Tape {
@@ -47,13 +54,9 @@ class Tape {
 }
 
 case class TapeTerm(idx: Int, tape: Tape) {
-  def eval(): Double = {
-    tape.eval_int(idx)
-  }
-
-  def derive(wrt: TapeTerm): Double = {
-    tape.derive_int(idx, wrt.idx)
-  }
+  def eval(): Double = tape.eval_int(idx)
+  def derive(wrt: TapeTerm): Double = tape.derive_int(idx, wrt.idx)
+  def set(v: Double) = tape.terms(idx).set(v)
 
   def +(other: TapeTerm) = {
     val idx = tape.terms.length
@@ -86,8 +89,12 @@ case class TapeTerm(idx: Int, tape: Tape) {
   }
 }
 
-sealed trait Term
-case class Value(id: String, a: Double) extends Term
+sealed trait Term {
+  def set(v: Double): Unit = throw Exception()
+}
+case class Value(id: String, var a: Double) extends Term {
+  override def set(v: Double) = this.a = v
+}
 case class Add(lhs: Int, rhs: Int) extends Term
 case class Sub(lhs: Int, rhs: Int) extends Term
 case class Mul(lhs: Int, rhs: Int) extends Term
