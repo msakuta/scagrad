@@ -1,14 +1,21 @@
 package example
 
+import scala.math.pow
+
 object Hello extends App {
-  var tape = new Tape
-  var a = tape.value("a", 123)
-  var b = tape.value("b", 123)
-  var c = tape.value("c", 42)
-  var ab = a + b
-  var abc = ab * c
+  val tape = new Tape
+  val a = tape.value("a", 123)
+  val b = tape.value("b", 123)
+  val c = tape.value("c", 42)
+  val ab = a + b
+  val abc = ab * c
   println(abc.eval)
   println(abc.derive(a))
+
+  val x = tape.value("x", 0)
+  val sin_x = x.apply(scala.math.sin, scala.math.cos)
+  println(sin_x.eval)
+  println(sin_x.derive(x))
 }
 
 class Tape {
@@ -23,13 +30,19 @@ class Tape {
   def eval_int(term: Int): Double = terms(term) match {
     case Value(_, v) => v
     case Add(lhs, rhs) => eval_int(lhs) + eval_int(rhs)
+    case Sub(lhs, rhs) => eval_int(lhs) - eval_int(rhs)
     case Mul(lhs, rhs) => eval_int(lhs) * eval_int(rhs)
+    case Div(lhs, rhs) => eval_int(lhs) / eval_int(rhs)
+    case UnaryFn(term, f, _) => f(eval_int(term))
   }
 
   def derive_int(term: Int, wrt: Int): Double = terms(term) match {
     case Value(_, _) => if (wrt == term) 1 else 0
     case Add(lhs, rhs) => derive_int(lhs, wrt) + derive_int(rhs, wrt)
+    case Sub(lhs, rhs) => derive_int(lhs, wrt) - derive_int(rhs, wrt)
     case Mul(lhs, rhs) => derive_int(lhs, wrt) * eval_int(rhs) + eval_int(lhs) * derive_int(rhs, wrt)
+    case Div(lhs, rhs) => derive_int(lhs, wrt) / eval_int(rhs) - eval_int(lhs) * derive_int(rhs, wrt) / pow(eval_int(lhs), 2)
+    case UnaryFn(term, _, grad) => grad(eval_int(term)) * derive_int(term, wrt)
   }
 }
 
@@ -48,9 +61,27 @@ case class TapeTerm(idx: Int, tape: Tape) {
     TapeTerm(idx, tape)
   }
 
+  def -(other: TapeTerm) = {
+    val idx = tape.terms.length
+    tape.terms = tape.terms :+ Div(this.idx, other.idx)
+    TapeTerm(idx, tape)
+  }
+
   def *(other: TapeTerm) = {
     val idx = tape.terms.length
     tape.terms = tape.terms :+ Mul(this.idx, other.idx)
+    TapeTerm(idx, tape)
+  }
+
+  def /(other: TapeTerm) = {
+    val idx = tape.terms.length
+    tape.terms = tape.terms :+ Div(this.idx, other.idx)
+    TapeTerm(idx, tape)
+  }
+
+  def apply(f: (Double) => Double, g: (Double) => Double) = {
+    val idx = tape.terms.length
+    tape.terms = tape.terms :+ UnaryFn(this.idx, f, g)
     TapeTerm(idx, tape)
   }
 }
@@ -58,5 +89,7 @@ case class TapeTerm(idx: Int, tape: Tape) {
 sealed trait Term
 case class Value(id: String, a: Double) extends Term
 case class Add(lhs: Int, rhs: Int) extends Term
+case class Sub(lhs: Int, rhs: Int) extends Term
 case class Mul(lhs: Int, rhs: Int) extends Term
-
+case class Div(lhs: Int, rhs: Int) extends Term
+case class UnaryFn(term: Int, f: (Double) => Double, grad: (Double) => Double) extends Term
