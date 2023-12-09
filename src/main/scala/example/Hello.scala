@@ -22,10 +22,10 @@ object Hello extends App {
     val sin_x2 = x2(scala.math.sin, scala.math.cos, derive_sin)
     for i <- -50 until 50
     do
-      val xval = i / 25.0
+      val xval = i / 10.0
       tape.clear_data()
       x.set(xval)
-      println(s"[$xval  , ${sin_x2.eval()}, ${sin_x2.derive(x)}],")
+      println(s"[$xval, ${sin_x2.eval()}, ${sin_x2.derive(x)}],")
   }
 
   def derive_exp(tape: Tape, in: Int, out: Int, der: Int): Option[Int] = Some(tape.add_mul(out, der))
@@ -77,7 +77,7 @@ object Hello extends App {
       println(s"[$xval, ${exp.eval()}, ${exp.derive(x)}, ${exp2.eval()}, ${exp3.eval()}],")
   }
 
-  demo_higher_order
+  demo_sin
 }
 
 class Tape {
