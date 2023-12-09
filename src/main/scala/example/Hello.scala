@@ -22,8 +22,8 @@ object Hello extends App {
     for i <- -50 until 50
     do
       val xval = i / 25.0
+      tape.clear_data()
       x.set(xval)
-      tape.clear_grad()
       println(s"[$xval  , ${sin_x2.eval()}, ${sin_x2.derive(x)}],")
   }
 
@@ -36,6 +36,7 @@ object Hello extends App {
   for i <- -50 until 50
   do
     val xval = i / 10.0
+    tape.clear_data()
     x.set(xval)
     exp.backward()
     val unwrap = (x: Option[Double]) => x match {
@@ -54,14 +55,22 @@ class Tape {
     TapeTerm(idx, this)
   }
 
-  def eval_int(term: Int): Double = terms(term).term match {
-    case Value(_, v) => v
-    case Add(lhs, rhs) => eval_int(lhs) + eval_int(rhs)
-    case Sub(lhs, rhs) => eval_int(lhs) - eval_int(rhs)
-    case Mul(lhs, rhs) => eval_int(lhs) * eval_int(rhs)
-    case Div(lhs, rhs) => eval_int(lhs) / eval_int(rhs)
-    case Neg(term2) => -eval_int(term2)
-    case UnaryFn(term2, f, _) => f(eval_int(term2))
+  def eval_int(term: Int): Double = {
+    terms(term).data match {
+      case Some(v) => return v
+      case None => {}
+    }
+    val data = terms(term).term match {
+      case Value(_, v) => v
+      case Add(lhs, rhs) => eval_int(lhs) + eval_int(rhs)
+      case Sub(lhs, rhs) => eval_int(lhs) - eval_int(rhs)
+      case Mul(lhs, rhs) => eval_int(lhs) * eval_int(rhs)
+      case Div(lhs, rhs) => eval_int(lhs) / eval_int(rhs)
+      case Neg(term2) => -eval_int(term2)
+      case UnaryFn(term2, f, _) => f(eval_int(term2))
+    }
+    terms(term).data = Some(data)
+    data
   }
 
   def derive_int(term: Int, wrt: Int): Double = terms(term).term match {
@@ -112,6 +121,7 @@ class Tape {
       }
   }
 
+  def clear_data() = for node <- terms do node.data = None
   def clear_grad() = for node <- terms do node.grad = None
 }
 
