@@ -6,7 +6,7 @@ An experimental autograd in Scala
 ## Overview
 
 They say Scala is a language with both OOP and functional aspects and feels like Rust.
-So let's give a try and implement autograd.
+So let's give it a try and implement autograd.
 
 ## Examples
 
